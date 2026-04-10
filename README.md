@@ -10,7 +10,7 @@ Este repositório contém **só** orquestração, Dockerfiles, overlays de confi
 
 | Documento | Conteúdo |
 |-----------|----------|
-| **[docs/RUNBOOK.md](docs/RUNBOOK.md)** | **Runbook completo:** preparar o *work*, Windows, Linux, VPS/cloud, firewall, GitHub, CI, troubleshooting. |
+| **[docs/RUNBOOK.md](docs/RUNBOOK.md)** | **Runbook completo:** preparar o *work*, Windows, Linux, **§7 deploy em fornecedor (VPS)**, firewall, GitHub, CI, troubleshooting. |
 | [SECURITY.md](SECURITY.md) | Secrets, exposição de portas, reporte de problemas. |
 | [CHANGELOG.md](CHANGELOG.md) | Histórico de versões deste repo. |
 

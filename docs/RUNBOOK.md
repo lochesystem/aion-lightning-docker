@@ -112,37 +112,86 @@ Volumes MariaDB: **`mariadb_data_host`** (distinto do modo bridge).
 
 ---
 
-## 7. Cloud / VPS (checklist genérico)
+## 7. Cloud / VPS — fornecedor de serviço
 
-Fornecedores típicos: **Oracle Cloud Ampere (free tier)**, **Hetzner**, **Contabo**, **DigitalOcean**, etc.
+Fornecedores típicos: **Hetzner**, **Contabo**, **DigitalOcean**, **Linode**, **Vultr**, **Oracle Cloud** (Ampere free tier), etc. O fluxo é o mesmo: **VM Linux + Docker + esta stack + *work* compilado**.
 
-1. **SO:** Ubuntu 22.04 ou 24.04 LTS amd64 (ARM: testar `docker compose build` no destino).
-2. **Docker:** instalar [Docker Engine](https://docs.docker.com/engine/install/ubuntu/) + plugin Compose.
-3. **Bootstrap rápido** (opcional):
+### 7.0 “Imagem do servidor” — o que estás mesmo a subir
+
+Este repositório **não** publica um único `docker pull meu-servidor:latest` com o jogo dentro. Em produção usas:
+
+- **Dockerfiles** deste repo → `docker compose build` gera imagens **login / game / chat** (Temurin 8 + entrypoints).
+- **Volumes em bind** → montam `AL-Login/build/dist`, `AL-Game/build/Dist`, `ChatServer/...` e os `.sql` a partir do **`aion-lightning-work`** no disco da VPS.
+
+Ou seja: no fornecedor precisas de **disco com o *work* compilado** (ou compilas lá com JDK 8 + Ant). Publicar só imagens no GHCR/Docker Hub sem os JARs/static_data não chega — a menos que cries tu um pipeline próprio que embuta tudo (fora do âmbito deste repo).
+
+**Modo recomendado em VPS:** `docker-compose.host.yml` (rede `host`); no painel do fornecedor abre **TCP 2107, 7780, 10241** (e **22** para SSH).
+
+### 7.1 Checklist rápido
+
+| # | Item |
+|---|------|
+| 1 | Ubuntu **22.04/24.04** amd64 (ou ARM com `docker compose build` a funcionar). |
+| 2 | Docker Engine + Compose (`scripts/bootstrap-vps.sh` ou [install oficial](https://docs.docker.com/engine/install/ubuntu/)). |
+| 3 | Cópias de **`aion-lightning-docker`** e **`aion-lightning-work`** (compilado) no VPS. |
+| 4 | `compose.env` com `AION_WORK_ROOT` = caminho **absoluto no servidor**. |
+| 5 | Overlays: `host/chat` + `ipconfig.xml` com o **IPv4 que os clientes usam** (ver §7.2). |
+| 6 | Firewall / **Security Group:** TCP **2107, 7780, 10241**; **não** expor **3306**. |
+| 7 | `docker compose -f docker-compose.host.yml --env-file compose.env up -d --build` |
+
+### 7.2 Passo a passo no fornecedor (VPS nova)
+
+1. **Criar a VM** no painel (4 GB RAM mínimo razoável; ver §2). Anota o **IP público** IPv4 (ex.: `203.0.113.50`).
+2. **Regras de rede (Security Group / Cloud Firewall):** entrada **TCP 22** (SSH), **2107**, **7780**, **10241**. Saída padrão OK. Não abras **3306** à Internet.
+3. **SSH:** `ssh ubuntu@SEU_IP` (ou `root@…` conforme a imagem).
+4. **Docker (Ubuntu):**
    ```bash
-   chmod +x scripts/bootstrap-vps.sh
+   sudo apt-get update && sudo apt-get install -y git
+   git clone https://github.com/lochesystem/aion-lightning-docker.git
+   cd aion-lightning-docker
+   chmod +x scripts/bootstrap-vps.sh mariadb/initdb/01-import-databases.sh
    sudo ./scripts/bootstrap-vps.sh
+   sudo usermod -aG docker "$USER" && newgrp docker   # ou logout/login
    ```
-4. Copiar para o servidor:
-   - Este repositório (`aion-lightning-docker`).
-   - O *work* compilado **ou** o código-fonte + `ant`/`jdk8` no servidor.
-5. Criar `compose.env` no servidor com `AION_WORK_ROOT` apontando para o caminho **no VPS**.
-6. **Firewall / Security Group**
-   - Abrir **TCP: 2107, 7780, 10241** para a internet (ou só para IPs conhecidos).
-   - **Não** expor **3306** publicamente. Acesso DB: SSH tunnel ou rede privada.
-7. **`AION_PUBLIC_ADDRESS`** = IPv4 elástico/público da VPS (ou Tailscale se todo o tráfego for pela VPN).
-8. Subir stack (preferir **`docker-compose.host.yml`** em Linux nu).
-9. Validar:
+5. **Levar o *work* para o VPS** (escolhe uma):
+   - `git clone` do teu fork + no servidor: `ant dist` em Login, Game, Chat (JDK 8).
+   - Ou no **teu PC:** empacotar pastas `build/dist` e enviar com **scp/rsync** para algo como `/home/ubuntu/aion-lightning-work`.
+6. **`compose.env`** na pasta `aion-lightning-docker`:
    ```bash
-   docker compose -f docker-compose.host.yml --env-file compose.env ps
-   docker compose -f docker-compose.host.yml --env-file compose.env logs login --tail 30
-   docker compose -f docker-compose.host.yml --env-file compose.env logs game --tail 30
+   cp compose.env.example compose.env
+   nano compose.env
    ```
+   - `AION_WORK_ROOT=/home/ubuntu/aion-lightning-work` (exemplo — ajusta ao caminho real).
+   - `MYSQL_ROOT_PASSWORD=` password forte.
+   - `AION_PUBLIC_ADDRESS=` **o mesmo IP público** que os jogadores usam (ou IP Tailscale se *só* VPN).
+7. **Modo host — chat:** edita `config-overrides/host/chat/config/chatserver.properties`:
+   - `chatserver.network.client.address = IP_PUBLICO:10241` (substitui `127.0.0.1`).
+8. **Lista de mundos no cliente:** edita `config-overrides/game/network/ipconfig.xml`:
+   - `default="IP_PUBLICO"` (só IPv4, como no exemplo `127.0.0.1`; em host mode o GS escuta **7780** nesse IP).
+   - Remove ou ajusta `<iprange>` Tailscale se não usares Tailscale; para LAN, acrescenta faixa `192.168.x.x` se precisares.
+9. **Primeiro arranque:**
+   ```bash
+   cd ~/aion-lightning-docker   # ou /opt/...
+   docker compose -f docker-compose.host.yml --env-file compose.env up -d --build
+   docker compose -f docker-compose.host.yml --env-file compose.env ps
+   docker compose -f docker-compose.host.yml --env-file compose.env logs game --tail 50
+   ```
+10. **Firewall local (opcional, Ubuntu):** se usares `ufw`:
+    ```bash
+    sudo ufw allow OpenSSH
+    sudo ufw allow 2107/tcp
+    sudo ufw allow 7780/tcp
+    sudo ufw allow 10241/tcp
+    sudo ufw enable
+    ```
+11. **Cliente:** no `config.ini` / launcher, **Login IP** = IP público da VPS (mesmo valor coerente com `ipconfig` e chat).
 
-### 7.1 Oracle Cloud Always Free (nota)
+**Nota:** Se mudares o IP elástico da VM, repete os passos 6–8 (e reinicia a stack) para o jogo e o chat anunciarem o endereço certo.
+
+### 7.3 Oracle Cloud Always Free (nota)
 
 - **Ampere A1 (ARM):** boa RAM gratuita; imagens base `eclipse-temurin` costumam ter variantes **arm64** — validar com `docker compose build`.
-- **VM AMD1 GB:** normalmente **insuficiente** para esta stack completa.
+- **VM AMD 1 GB:** normalmente **insuficiente** para esta stack completa.
 
 ---
 
