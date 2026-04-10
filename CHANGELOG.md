@@ -21,6 +21,5 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-PT/1.0.0/), e e
 - Stack: MariaDB 10.11, Login/Game (JDK 8), Chat (JRE 8), overlays em `config-overrides/`.
 - Scripts: `start-aion-docker.ps1`, `import-aion-databases.ps1`, `migrate-mysql-to-aion-docker.ps1`.
 
-<!-- Após o primeiro push: substitui TEU_ORG pelo teu utilizador ou organização GitHub. -->
-[Unreleased]: https://github.com/TEU_ORG/aion-lightning-docker/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/TEU_ORG/aion-lightning-docker/releases/tag/v1.0.0
+[Unreleased]: https://github.com/lochesystem/aion-lightning-docker/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/lochesystem/aion-lightning-docker/releases/tag/v1.0.0
