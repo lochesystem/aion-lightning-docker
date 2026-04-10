@@ -1,0 +1,12 @@
+compose.env
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+*~
+
+# Artefactos locais de patch / IDE
+build/
+patch_out/

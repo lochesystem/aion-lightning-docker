@@ -1,0 +1,9 @@
+<!--
+  Docker Desktop: o cliente no mesmo PC aparece no Login como 172.x (NAT da bridge).
+  O ipconfig do Dist original mapeava 172.16/12 para 172.16.0.0 — o jogo recebia um IP errado ao escolher o servidor.
+  default=127.0.0.1: mundo/game na mesma máquina. Clientes Tailscale 100.x: alinha o address com AION_PUBLIC_ADDRESS no compose.env.
+  Para amigos só em LAN (sem Tailscale), edita o address da gama 192.168 ou acrescenta a tua LAN.
+-->
+<ipconfig default="127.0.0.1">
+	<iprange min="100.64.0.0" max="100.127.255.255" address="100.95.240.57"/>
+</ipconfig>

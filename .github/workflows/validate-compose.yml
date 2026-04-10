@@ -1,0 +1,30 @@
+# Valida sintaxe dos ficheiros Compose sem subir contentores (CI leve).
+
+name: validate-compose
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate dummy compose.env for CI
+        run: |
+          cp compose.env.example compose.env
+          sed -i 's|^AION_WORK_ROOT=.*|AION_WORK_ROOT=/tmp/aion-work-dummy|' compose.env
+          mkdir -p /tmp/aion-work-dummy/aion-lightning-2.7/AL-Login/sql
+          mkdir -p /tmp/aion-work-dummy/aion-lightning-2.7/AL-Game/sql
+          touch /tmp/aion-work-dummy/aion-lightning-2.7/AL-Login/sql/al_server_ls.sql
+          touch /tmp/aion-work-dummy/aion-lightning-2.7/AL-Game/sql/al_server_gs.sql
+
+      - name: Docker Compose config (bridge)
+        run: docker compose --env-file compose.env -f docker-compose.yml config --quiet
+
+      - name: Docker Compose config (host)
+        run: docker compose --env-file compose.env -f docker-compose.host.yml config --quiet

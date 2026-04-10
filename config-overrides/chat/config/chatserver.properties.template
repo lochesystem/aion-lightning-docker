@@ -1,0 +1,10 @@
+#
+# Template Docker (bridge): bind em *:10241. O IP anunciado aos jogadores (Tailscale/LAN) vem de
+# chatserver.network.client.advertise, acrescentado no arranque se AION_PUBLIC_ADDRESS estiver definido em compose.env.
+#
+
+chatserver.network.client.address = *:10241
+
+chatserver.network.gameserver.address = *:9021
+
+chatserver.network.gameserver.password = aion_chat

@@ -1,0 +1,91 @@
+# Linux (ou Docker com host network): todos os serviços na stack de rede do host.
+# Não funciona no Docker Desktop Windows da mesma forma que no Linux; use WSL2/Linux ou o docker-compose.yml em bridge.
+#
+# Antes de subir: edite config-overrides/host/chat/config/chatserver.properties (client.address = IP visível pelos jogadores).
+#
+# Uso: docker compose -f docker-compose.host.yml --env-file compose.env up -d
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: aion-mariadb-host
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
+    volumes:
+      - mariadb_data_host:/var/lib/mysql
+      - ./mariadb/initdb:/docker-entrypoint-initdb.d:ro
+      - type: bind
+        source: ${AION_WORK_ROOT}/aion-lightning-2.7/AL-Login/sql/al_server_ls.sql
+        target: /mnt/aion-import/al_server_ls.sql
+        read_only: true
+      - type: bind
+        source: ${AION_WORK_ROOT}/aion-lightning-2.7/AL-Game/sql/al_server_gs.sql
+        target: /mnt/aion-import/al_server_gs.sql
+        read_only: true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  login:
+    build:
+      context: ./docker/login
+    container_name: aion-login-host
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ${AION_WORK_ROOT}/aion-lightning-2.7/AL-Login/build/dist
+        target: /opt/aion/login
+      - ./config-overrides/host/login/network/database.properties:/opt/aion/login/config/network/database.properties:ro
+
+  game:
+    build:
+      context: ./docker/game
+    container_name: aion-game-host
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      login:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ${AION_WORK_ROOT}/aion-lightning-2.7/AL-Game/build/Dist
+        target: /opt/aion/game
+      - ./config-overrides/host/game/network/database.properties:/opt/aion/game/config/network/database.properties:ro
+      - ./config-overrides/host/game/network/network.properties:/opt/aion/game/config/network/network.properties:ro
+      # Mesmo overlay que bridge: IP anunciado na lista de servidores (alinhar default + Tailscale com AION_PUBLIC_ADDRESS)
+      - ./config-overrides/game/network/ipconfig.xml:/opt/aion/game/config/network/ipconfig.xml:ro
+
+  chat:
+    build:
+      context: ./docker/chat
+    container_name: aion-chat-host
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      login:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ${AION_WORK_ROOT}/aion-lightning-2.7/ChatServer/build/dist/chatserver
+        target: /opt/aion/chat
+      - ./config-overrides/host/chat/config/chatserver.properties:/opt/aion/chat/config/chatserver.properties:ro
+
+volumes:
+  mariadb_data_host:
